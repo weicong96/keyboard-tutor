@@ -1,5 +1,6 @@
 "use client";
 import { useRef } from "react";
+import { useTraining } from "@/providers/training-provider";
 
 type InputFieldProps = {
   sentence: string;
@@ -24,6 +25,7 @@ export default function InputField({
   onWordComplete,
   onFirstTyping
 }: InputFieldProps) {
+  const { mapKeyCodeToKC } = useTraining();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -120,9 +122,9 @@ export default function InputField({
       }, 0);
       return;
     }
-
+    
     // Handle regular character input
-    if (e.key.length === 1) {
+    if (e.key.length === 1 || mapKeyCodeToKC(e.key, e.code)) {
       e.preventDefault();
       
       // Track first typing to start timer
@@ -134,18 +136,24 @@ export default function InputField({
       if (nextCharIndex >= sentence.length) {
         return;
       }
-      
-      const expectedChar = sentence[nextCharIndex];
-      const typedChar = e.key;
+      console.log(e.key, e.code, 'e.key, e.code')
+      let nextKeyLength = mapKeyCodeToKC(e.key, e.code)?.displayKey?.length || 1;
+
+      const expectedChar = sentence.slice(nextCharIndex, nextCharIndex + nextKeyLength);
+      let typedChar = e.key;
+      if(mapKeyCodeToKC(e.key, e.code)?.displayKey){
+        typedChar = mapKeyCodeToKC(e.key, e.code)?.displayKey || e.key;
+        console.log(mapKeyCodeToKC(e.key, e.code), 'mapKeyCodeToKC')
+      }
       
       if (expectedChar === typedChar) {
         // Correct character - advance both cursor and typed length
         input.value = currentValue + typedChar;
         if (onTypedLengthChange) {
-          onTypedLengthChange(typedLength + 1);
+          onTypedLengthChange(typedLength + nextKeyLength);
         }
         if (onCursorChange) {
-          onCursorChange(cursorPosition + 1);
+          onCursorChange(cursorPosition + nextKeyLength);
         }
         // Remove from incorrect positions if it was there
         const newIncorrect = new Set(incorrectPositions);
@@ -161,12 +169,14 @@ export default function InputField({
           onIncorrectPositionsChange(newIncorrect);
         }
         if (onTypedLengthChange) {
-          onTypedLengthChange(typedLength + 1);
+          onTypedLengthChange(typedLength + nextKeyLength);
         }
         // Still add the character to input for visual feedback
         input.value = currentValue + typedChar;
       }
     }
+
+    console.info(mapKeyCodeToKC(e.key, e.code), 'key')
   };
 
 

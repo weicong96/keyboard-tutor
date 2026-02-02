@@ -5,7 +5,7 @@ import InputField from "@/components/inputfield";
 import { useState, useEffect } from "react";
 import KeyboardLayout from "@/components/keyboard_layout";
 import { useParams, useRouter } from "next/navigation";
-
+import { useTraining } from "@/providers/training-provider";
 const defaultWords = [
   "react",
   "keyboard",
@@ -35,20 +35,32 @@ interface LayoutData {
 }
 
 export default function TrainingWithLayout() {
+  const { selectedLayout, setSelectedLayout, selectedLayer, setSelectedLayer, getDisplayKeyLabel } = useTraining();
   const params = useParams();
   const router = useRouter();
   const layoutId = params.layout_id as string;
   
   const [words, setWords] = useState(defaultWords);
-  const [layoutData, setLayoutData] = useState<LayoutData | null>(null);
+  // const [layoutData, setLayoutData] = useState<LayoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedLayer, setSelectedLayer] = useState(0);
+  const [selectedLayerIndex, setSelectedLayerIndex] = useState(0);
   
-  // Shuffle words only on client after mount to avoid hydration mismatch
   useEffect(() => {
-    setWords(shuffleWords(defaultWords));
-  }, []);
+    if (selectedLayer && selectedLayerIndex != 0) {
+      const keys = new Set(selectedLayer.flat())
+      let shuffledWords: string[] = shuffleWords(Array.from(keys)).filter((word) => word != "KC_LSHIFT" && word != "KC_RSHIFT" && word !== "KC_BSPACE" && word !== "KC_SPACE" && word !== "KC_MUTE").map(word => {
+        return getDisplayKeyLabel(word)
+      })
+      setWords(shuffledWords)
+    }
+  }, [selectedLayer, selectedLayerIndex]);
+
+  useEffect(() => {
+    if (selectedLayout) {
+      setSelectedLayer(selectedLayout.layers[selectedLayerIndex] || [])
+    }
+  }, [selectedLayout, selectedLayerIndex]);
 
   // Fetch layout data
   useEffect(() => {
@@ -59,9 +71,8 @@ export default function TrainingWithLayout() {
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.layout) {
-          setLayoutData(data.layout);
-          // Reset to layer 0 when layout changes
-          setSelectedLayer(0);
+          setSelectedLayout(data.layout)
+          setSelectedLayerIndex(0)
         } else {
           setError(data.error || "Failed to load layout");
         }
@@ -147,7 +158,7 @@ export default function TrainingWithLayout() {
     );
   }
 
-  if (error || !layoutData) {
+  if (error || !selectedLayout) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <p className="text-red-600 mb-4">{error || "Layout not found"}</p>
@@ -175,21 +186,21 @@ export default function TrainingWithLayout() {
       <h3>Learn to touch type on your own keyboard layout</h3>
       
       {/* Layer selector */}
-      {layoutData && layoutData.layers.length > 0 && (
+      {selectedLayout && selectedLayout.layers.length > 0 && (
         <div className="mb-4">
           <label htmlFor="layer-select" className="mr-2 font-semibold">
             Select Layer:
           </label>
           <select
             id="layer-select"
-            value={selectedLayer}
-            onChange={(e) => setSelectedLayer(Number(e.target.value))}
+            value={selectedLayerIndex}
+            onChange={(e) => setSelectedLayerIndex(Number(e.target.value))}
             className="px-3 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
             disabled={isComplete}
           >
-            {layoutData.layers.map((_, index) => (
+            {selectedLayout.layers.map((_, index) => (
               <option key={index} value={index}>
-                Layer {index}
+                Layer {index+1}
               </option>
             ))}
           </select>
@@ -235,7 +246,7 @@ export default function TrainingWithLayout() {
         </div>
       )}
 
-      {!isComplete && <KeyboardLayout layoutData={layoutData.layers} selectedLayer={selectedLayer} />}
+      {!isComplete && <KeyboardLayout/>}
     </div>
   );
 }
